@@ -18,8 +18,44 @@ function stripQuotes(v: string): string {
   return t;
 }
 
+// Konversi nilai numerik yang mungkin sudah berformat.
+// Excel dengan number-format (ribuan) + sheet_to_json({raw:false}) mengembalikan
+// string seperti "34,177,458" atau "34.177.458" — Number() langsung = NaN.
+// Tangani pemisah ribuan/desimal (koma & titik), simbol mata uang, dan spasi.
 function toNumber(v: string): number {
-  const n = Number(stripQuotes(v));
+  let t = stripQuotes(v).trim();
+  if (!t) return 0;
+  // Buang simbol mata uang & spasi (termasuk NBSP dari toLocaleString id-ID).
+  t = t.replace(/rp/gi, "").replace(/[\s ]/g, "");
+  if (!t || t === "-") return 0;
+
+  const hasComma = t.includes(",");
+  const hasDot = t.includes(".");
+  if (hasComma && hasDot) {
+    // Pemisah yang muncul terakhir dianggap desimal.
+    if (t.lastIndexOf(",") > t.lastIndexOf(".")) {
+      t = t.replace(/\./g, "").replace(",", "."); // ID: titik ribuan, koma desimal
+    } else {
+      t = t.replace(/,/g, ""); // EN: koma ribuan, titik desimal
+    }
+  } else if (hasComma) {
+    const parts = t.split(",");
+    // >2 bagian, atau bagian akhir 3 digit → koma sebagai pemisah ribuan.
+    if (parts.length > 2 || (parts.length === 2 && parts[1].length === 3)) {
+      t = t.replace(/,/g, "");
+    } else {
+      t = t.replace(",", "."); // koma desimal
+    }
+  } else if (hasDot) {
+    const parts = t.split(".");
+    // >2 bagian, atau bagian akhir 3 digit → titik sebagai pemisah ribuan.
+    if (parts.length > 2 || (parts.length === 2 && parts[1].length === 3)) {
+      t = t.replace(/\./g, "");
+    }
+    // else: titik desimal murni, biarkan.
+  }
+
+  const n = Number(t);
   return isNaN(n) ? 0 : n;
 }
 
