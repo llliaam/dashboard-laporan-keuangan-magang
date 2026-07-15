@@ -4,6 +4,7 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import { createPortal } from "react-dom";
 import { useSearchParams } from "next/navigation";
 import AppShell from "@/components/AppShell";
+import ConfirmDialog from "@/components/ConfirmDialog";
 import UploadFlow from "@/components/UploadFlow";
 import KpiCard from "@/components/KpiCard";
 import Pagination from "@/components/Pagination";
@@ -39,6 +40,9 @@ function DashboardInner() {
   const [exportOpen, setExportOpen] = useState(false);
   const exportRef = useRef<HTMLDivElement>(null);
   const [selectedRow, setSelectedRow] = useState<CleanRow | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [editRow, setEditRow] = useState<CleanRow | null>(null);
+  const [deleteRow, setDeleteRow] = useState<CleanRow | null>(null);
 
   // Drill-down dari halaman Analitik: /?corpid=XXX.
   // Pola "adjust state during render": saat param berubah, terapkan sebagai filter instansi.
@@ -201,6 +205,37 @@ function DashboardInner() {
     localStorage.removeItem("active-dataset-meta");
   };
 
+  const handleCreateRow = useCallback((newRow: CleanRow) => {
+    setRows((prev) => {
+      const next = [newRow, ...(prev ?? [])];
+      const id = getActiveId();
+      if (id) saveDataset(id, next).catch(() => {});
+      return next;
+    });
+  }, []);
+
+  const handleUpdateRow = useCallback((original: CleanRow, updated: CleanRow) => {
+    setRows((prev) => {
+      if (!prev) return prev;
+      const next = prev.map((r) => (r === original ? updated : r));
+      const id = getActiveId();
+      if (id) saveDataset(id, next).catch(() => {});
+      return next;
+    });
+  }, []);
+
+  const handleDeleteRow = useCallback((target: CleanRow) => {
+    setRows((prev) => {
+      if (!prev) return prev;
+      const next = prev.filter((r) => r !== target);
+      const id = getActiveId();
+      if (id) saveDataset(id, next).catch(() => {});
+      return next;
+    });
+    setSelectedRow(null);
+    setDeleteRow(null);
+  }, []);
+
   // ===== Render =====
   if (loading) {
     return (
@@ -245,6 +280,12 @@ function DashboardInner() {
             className="px-4 py-2.5 rounded-[10px] text-sm font-semibold text-brand-blue border border-brand-blue/30 bg-white hover:bg-blue-50 transition-colors"
           >
             + Konversi Baru
+          </button>
+          <button
+            onClick={() => setCreateOpen(true)}
+            className="px-4 py-2.5 rounded-[10px] text-sm font-semibold text-white bg-brand-blue hover:brightness-105 transition-all active:scale-95"
+          >
+            + Tambah Data
           </button>
           <div className="relative" ref={exportRef}>
             <button
@@ -423,7 +464,37 @@ function DashboardInner() {
         </div>
       </div>
 
-      <RowDetailModal row={selectedRow} onClose={() => setSelectedRow(null)} />
+      <RowDetailModal
+        row={selectedRow}
+        onClose={() => setSelectedRow(null)}
+        onEdit={(r) => { setSelectedRow(null); setEditRow(r); }}
+        onDelete={(r) => { setDeleteRow(r); }}
+      />
+
+      {/* Edit modal */}
+      <RowFormModal
+        initial={editRow}
+        onClose={() => setEditRow(null)}
+        onSubmit={(updated) => { handleUpdateRow(editRow!, updated); setEditRow(null); }}
+      />
+
+      {/* Create modal */}
+      <RowFormModal
+        initial={null}
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        onSubmit={(newRow) => { handleCreateRow(newRow); setCreateOpen(false); }}
+      />
+
+      {/* Delete confirm */}
+      <ConfirmDialog
+        open={!!deleteRow}
+        title="Hapus data ini?"
+        message={`Baris "${deleteRow?.corpnm || deleteRow?.corpid}" akan dihapus secara permanen dari dataset.`}
+        confirmLabel="Hapus"
+        onConfirm={() => deleteRow && handleDeleteRow(deleteRow)}
+        onCancel={() => setDeleteRow(null)}
+      />
     </div>
   );
 }
@@ -554,7 +625,17 @@ function DetailField({ label, value, mono }: { label: string; value: string; mon
   );
 }
 
-function RowDetailModal({ row, onClose }: { row: CleanRow | null; onClose: () => void }) {
+function RowDetailModal({
+  row,
+  onClose,
+  onEdit,
+  onDelete,
+}: {
+  row: CleanRow | null;
+  onClose: () => void;
+  onEdit: (r: CleanRow) => void;
+  onDelete: (r: CleanRow) => void;
+}) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
 
@@ -616,14 +697,153 @@ function RowDetailModal({ row, onClose }: { row: CleanRow | null; onClose: () =>
           </div>
         </div>
 
-        <div className="px-7 pb-6">
+        {/* Footer — Edit / Delete / Tutup */}
+        <div className="px-7 pb-6 flex gap-3">
+          <button
+            onClick={() => onDelete(row)}
+            className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-semibold text-red-600 bg-red-50 hover:bg-red-100 transition-colors"
+          >
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <path d="M1.5 3.5h11M5.5 3.5v-2h3v2M3 3.5l.75 8.5h6.5L11 3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            Hapus
+          </button>
+          <button
+            onClick={() => onEdit(row)}
+            className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-semibold text-brand-blue bg-blue-50 hover:bg-blue-100 transition-colors"
+          >
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <path d="M9.5 2L12 4.5 5 11.5H2.5V9L9.5 2Z" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            Edit
+          </button>
           <button
             onClick={onClose}
-            className="w-full py-2.5 rounded-xl text-sm font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 transition-colors"
+            className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 transition-colors"
           >
             Tutup
           </button>
         </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+// ===== Form modal untuk Create dan Edit =====
+const EMPTY_ROW: CleanRow = {
+  corpid: "", corpnm: "", branchid: "", src_number: "",
+  amount: 0, fee: 0, total: 0,
+  product_name: "", sts_trx: "", txid: "", err_message: "",
+  tanggal: "",
+};
+
+function RowFormModal({
+  initial,
+  open,
+  onClose,
+  onSubmit,
+}: {
+  initial: CleanRow | null;
+  open?: boolean;
+  onClose: () => void;
+  onSubmit: (row: CleanRow) => void;
+}) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
+
+  const isOpen = initial !== null || !!open;
+  const isEdit = initial !== null;
+
+  const [form, setForm] = useState<CleanRow>(EMPTY_ROW);
+
+  // sync form to initial whenever modal opens
+  useEffect(() => {
+    if (isOpen) setForm(initial ?? EMPTY_ROW);
+  }, [isOpen, initial]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [isOpen, onClose]);
+
+  if (!isOpen || !mounted) return null;
+
+  const set = (k: keyof CleanRow, v: string) =>
+    setForm((f) => ({ ...f, [k]: ["amount", "fee", "total"].includes(k) ? Number(v) || 0 : v }));
+
+  const handleSubmit = (e: React.SyntheticEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!form.corpid.trim()) return;
+    onSubmit(form);
+  };
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[9999] flex items-center justify-center px-4"
+      style={{ background: "rgba(0,0,0,0.4)", backdropFilter: "blur(3px)" }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl animate-[fadeInScale_0.18s_ease] overflow-hidden">
+        {/* Header */}
+        <div className="flex items-center justify-between px-7 pt-6 pb-4 border-b border-gray-100">
+          <p className="font-bold text-gray-900 text-base">{isEdit ? "Edit Data" : "Tambah Data Baru"}</p>
+          <button onClick={onClose} className="w-8 h-8 rounded-lg hover:bg-gray-100 flex items-center justify-center transition-colors" aria-label="Tutup">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <path d="M2 2l10 10M12 2L2 12" stroke="#6b7280" strokeWidth="1.8" strokeLinecap="round" />
+            </svg>
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit}>
+          <div className="px-7 py-5 grid grid-cols-2 gap-x-5 gap-y-4 max-h-[60vh] overflow-y-auto">
+            {(
+              [
+                { key: "corpid", label: "corpid *", mono: true },
+                { key: "branchid", label: "branchid", mono: true },
+                { key: "corpnm", label: "corpnm", span: 2 },
+                { key: "src_number", label: "src_number", mono: true },
+                { key: "product_name", label: "product_name" },
+                { key: "sts_trx", label: "sts_trx" },
+                { key: "tanggal", label: "tanggal (YYYY-MM-DD HH:MM:SS)", span: 2 },
+                { key: "amount", label: "amount (angka)", num: true },
+                { key: "fee", label: "fee (angka)", num: true },
+                { key: "total", label: "total (angka)", num: true },
+                { key: "txid", label: "txid", mono: true },
+                { key: "err_message", label: "err_message", span: 2 },
+              ] as { key: keyof CleanRow; label: string; mono?: boolean; num?: boolean; span?: number }[]
+            ).map(({ key, label, mono, num, span }) => (
+              <div key={key} className={span === 2 ? "col-span-2" : ""}>
+                <label className="block text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-1">{label}</label>
+                <input
+                  type={num ? "number" : "text"}
+                  value={num ? (form[key] as number) : (form[key] as string)}
+                  onChange={(e) => set(key, e.target.value)}
+                  className={`w-full h-9 px-3 rounded-lg border border-gray-200 bg-gray-50 text-sm text-gray-800 outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue/50 ${mono ? "font-mono" : ""}`}
+                  required={key === "corpid"}
+                />
+              </div>
+            ))}
+          </div>
+
+          <div className="px-7 pb-6 pt-3 flex gap-3 border-t border-gray-100">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 transition-colors"
+            >
+              Batal
+            </button>
+            <button
+              type="submit"
+              className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white bg-brand-blue hover:brightness-105 transition-all active:scale-95"
+            >
+              {isEdit ? "Simpan Perubahan" : "Tambah Data"}
+            </button>
+          </div>
+        </form>
       </div>
     </div>,
     document.body
