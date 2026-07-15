@@ -12,7 +12,7 @@ import BarChart from "@/components/charts/BarChart";
 import DonutChart from "@/components/charts/DonutChart";
 import { StatusBadge } from "@/components/Badges";
 import type { CleanRow, ParseResult } from "@/lib/types";
-import { aggregateByDay, aggregateByStatus, isFailed, isSuccess } from "@/lib/aggregate";
+import { aggregateByStatus, isFailed, isSuccess } from "@/lib/aggregate";
 import { formatNumber, formatRupiah, formatRupiahCompact, formatTanggal } from "@/lib/format";
 import { exportCsv, exportXlsx } from "@/lib/export";
 import { saveDataset, loadDataset } from "@/lib/db";
@@ -181,19 +181,19 @@ function DashboardInner() {
     return { total, nominal, success, failed };
   }, [filtered]);
 
-  const byDay = useMemo(() => aggregateByDay(filtered), [filtered]);
   const byStatus = useMemo(() => aggregateByStatus(filtered), [filtered]);
 
   const dateRange = useMemo(() => {
-    if (byDay.length === 0) return "";
+    const dates = filtered.map((r) => r.tanggal.slice(0, 10)).filter(Boolean).sort();
+    if (dates.length === 0) return "";
     const fmt = (iso: string) => {
       const d = new Date(iso + "T00:00:00");
       return isNaN(d.getTime())
         ? iso
         : d.toLocaleDateString("id-ID", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
     };
-    return `${fmt(byDay[0].date)} - ${fmt(byDay[byDay.length - 1].date)}`;
-  }, [byDay]);
+    return `${fmt(dates[0])} - ${fmt(dates[dates.length - 1])}`;
+  }, [filtered]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const pageRows = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
@@ -323,9 +323,9 @@ function DashboardInner() {
       {/* Charts */}
       <div className="grid grid-cols-1 xl:grid-cols-[1fr_400px] gap-5">
         <div className="bg-white rounded-2xl p-6 shadow-[0_4px_16px_rgba(16,24,40,0.06)]">
-          <h2 className="font-semibold text-gray-900">Volume Transaksi per Hari</h2>
-          <p className="text-xs text-gray-400 mt-0.5 mb-4">Jumlah transaksi harian sepanjang periode</p>
-          <BarChart data={byDay} />
+          <h2 className="font-semibold text-gray-900">Volume Transaksi</h2>
+          <p className="text-xs text-gray-400 mt-0.5 mb-4">Pilih granularitas, metrik, dan rentang tanggal</p>
+          <BarChart rows={filtered} />
         </div>
         <div className="bg-white rounded-2xl p-6 shadow-[0_4px_16px_rgba(16,24,40,0.06)]">
           <h2 className="font-semibold text-gray-900">Distribusi Status Transaksi</h2>
