@@ -324,7 +324,7 @@ function DashboardInner() {
       <div className="grid grid-cols-1 xl:grid-cols-[1fr_400px] gap-5">
         <div className="bg-white rounded-2xl p-6 shadow-[0_4px_16px_rgba(16,24,40,0.06)]">
           <h2 className="font-semibold text-gray-900">Volume Transaksi</h2>
-          <p className="text-xs text-gray-400 mt-0.5 mb-4">Pilih granularitas, metrik, dan rentang tanggal</p>
+          <p className="text-xs text-gray-400 mt-0.5 mb-4">Pilih berdasarkan rentang tanggal, jumlah transaksi dan nominal transaksi</p>
           <BarChart rows={filtered} />
         </div>
         <div className="bg-white rounded-2xl p-6 shadow-[0_4px_16px_rgba(16,24,40,0.06)]">

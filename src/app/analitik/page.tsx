@@ -74,7 +74,7 @@ export default function AnalitikPage() {
   const pageRows = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   const drillDown = (a: InstansiAggregate) => {
-    router.push(`/?corpid=${encodeURIComponent(a.corpid)}`);
+    router.push(`/analitik/detail?corpid=${encodeURIComponent(a.corpid)}`);
   };
 
   if (loading) {
