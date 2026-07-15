@@ -5,6 +5,12 @@ import type { CleanRow, ParseResult } from "./types";
 // corpid | corpnm | src_number | branchid | amount | fee | total | product_name | sts_trx | txid | err_message | tanggal
 const RAW_COL_COUNT = 12;
 
+// Nama sheet yang dicari per jenis file.
+const SHEET_NAMES: Record<string, string[]> = {
+  "Laporan Transaksi": ["data transaksi"],
+  "Pemasukan Pajak Pemda": ["pemasukan pajak", "pajak", "pemasukan"],
+};
+
 // Langkah 2 — hapus tanda kutip tunggal di awal/akhir nilai string.
 function stripQuotes(v: string): string {
   const t = v.trim();
@@ -68,12 +74,20 @@ export function parseRawLines(allLines: string[]): ParseResult {
   return { rows, totalRaw: lines.length, dropped, droppedSamples };
 }
 
-// Baca workbook Excel: ambil sheet "Data Transaksi" jika ada, selain itu sheet pertama.
+// Cari nama sheet yang cocok untuk fileType, fallback ke sheet pertama.
+function findSheet(wb: XLSX.WorkBook, fileType: string): string {
+  const candidates = SHEET_NAMES[fileType] ?? ["data transaksi"];
+  const found = wb.SheetNames.find((n) =>
+    candidates.some((c) => n.trim().toLowerCase().includes(c))
+  );
+  return found ?? wb.SheetNames[0];
+}
+
+// Baca workbook Excel: ambil sheet sesuai fileType, fallback sheet pertama.
 // Data mentah = 1 kolom tunggal di kolom A, baris 1 header.
-export function parseWorkbook(data: ArrayBuffer): ParseResult {
+export function parseWorkbook(data: ArrayBuffer, fileType = "Laporan Transaksi"): ParseResult {
   const wb = XLSX.read(data, { type: "array" });
-  const sheetName =
-    wb.SheetNames.find((n) => n.trim().toLowerCase() === "data transaksi") ?? wb.SheetNames[0];
+  const sheetName = findSheet(wb, fileType);
   if (!sheetName) throw new Error("File tidak memiliki sheet.");
   const sheet = wb.Sheets[sheetName];
 
@@ -91,7 +105,8 @@ export function parseWorkbook(data: ArrayBuffer): ParseResult {
   return parseRawLines(lines);
 }
 
-export function parseCsvText(text: string): ParseResult {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export function parseCsvText(text: string, _fileType = "Laporan Transaksi"): ParseResult {
   const lines = text.split(/\r?\n/);
   lines.shift(); // buang header
   return parseRawLines(lines);

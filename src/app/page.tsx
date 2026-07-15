@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useSearchParams } from "next/navigation";
 import AppShell from "@/components/AppShell";
 import UploadFlow from "@/components/UploadFlow";
@@ -10,7 +11,6 @@ import BarChart from "@/components/charts/BarChart";
 import DonutChart from "@/components/charts/DonutChart";
 import { StatusBadge } from "@/components/Badges";
 import type { CleanRow, ParseResult } from "@/lib/types";
-import { CLEAN_COLUMNS } from "@/lib/types";
 import { aggregateByDay, aggregateByStatus, isFailed, isSuccess } from "@/lib/aggregate";
 import { formatNumber, formatRupiah, formatRupiahCompact, formatTanggal } from "@/lib/format";
 import { exportCsv, exportXlsx } from "@/lib/export";
@@ -33,9 +33,12 @@ function DashboardInner() {
   const [kanal, setKanal] = useState("");
   const [status, setStatus] = useState("");
   const [instansi, setInstansi] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [page, setPage] = useState(1);
   const [exportOpen, setExportOpen] = useState(false);
   const exportRef = useRef<HTMLDivElement>(null);
+  const [selectedRow, setSelectedRow] = useState<CleanRow | null>(null);
 
   // Drill-down dari halaman Analitik: /?corpid=XXX.
   // Pola "adjust state during render": saat param berubah, terapkan sebagai filter instansi.
@@ -146,23 +149,25 @@ function DashboardInner() {
   const filtered = useMemo(() => {
     if (!rows) return [];
     const q = search.trim().toLowerCase();
+    // dateFrom/dateTo dibandingkan dengan 10 karakter awal tanggal mentah (YYYY-MM-DD)
+    const from = dateFrom || "";
+    const to = dateTo || "";
     return rows.filter((r) => {
       if (kanal && r.product_name !== kanal) return false;
       if (status && r.sts_trx !== status) return false;
       if (instansi && r.corpid !== instansi) return false;
+      if (from && r.tanggal.slice(0, 10) < from) return false;
+      if (to && r.tanggal.slice(0, 10) > to) return false;
       if (q) {
         const hay = `${r.corpid} ${r.corpnm} ${r.txid} ${r.src_number}`.toLowerCase();
         if (!hay.includes(q)) return false;
       }
       return true;
     });
-  }, [rows, search, kanal, status, instansi]);
+  }, [rows, search, kanal, status, instansi, dateFrom, dateTo]);
 
-  // reset ke halaman 1 setiap filter berubah (dipanggil dari handler, bukan effect)
-  const setSearchAndReset = (v: string) => { setSearch(v); setPage(1); };
-  const setKanalAndReset = (v: string) => { setKanal(v); setPage(1); };
-  const setStatusAndReset = (v: string) => { setStatus(v); setPage(1); };
-  const setInstansiAndReset = (v: string) => { setInstansi(v); setPage(1); };
+  // reset ke halaman 1 setiap filter berubah
+  useEffect(() => { setPage(1); }, [search, kanal, status, instansi, dateFrom, dateTo]);
 
   const kpi = useMemo(() => {
     const total = filtered.length;
@@ -334,12 +339,28 @@ function DashboardInner() {
           value={instansi}
           onChange={setInstansi}
           placeholder="Semua Instansi"
-          options={instansiOptions.map(([id, nm]) => id)}
+          options={instansiOptions.map(([id]) => id)}
           labels={Object.fromEntries(instansiOptions)}
         />
-        {(search || kanal || status || instansi) && (
+        {/* Date range */}
+        <input
+          type="date"
+          value={dateFrom}
+          onChange={(e) => setDateFrom(e.target.value)}
+          title="Tanggal mulai"
+          className={`h-[50px] px-3 rounded-[10px] bg-white text-sm outline-none focus:ring-2 focus:ring-brand-blue/30 cursor-pointer ${dateFrom ? "text-gray-800" : "text-gray-400"}`}
+        />
+        <span className="text-gray-400 text-sm">–</span>
+        <input
+          type="date"
+          value={dateTo}
+          onChange={(e) => setDateTo(e.target.value)}
+          title="Tanggal akhir"
+          className={`h-[50px] px-3 rounded-[10px] bg-white text-sm outline-none focus:ring-2 focus:ring-brand-blue/30 cursor-pointer ${dateTo ? "text-gray-800" : "text-gray-400"}`}
+        />
+        {(search || kanal || status || instansi || dateFrom || dateTo) && (
           <button
-            onClick={() => { setSearch(""); setKanal(""); setStatus(""); setInstansi(""); }}
+            onClick={() => { setSearch(""); setKanal(""); setStatus(""); setInstansi(""); setDateFrom(""); setDateTo(""); }}
             className="h-[50px] px-4 rounded-[10px] text-sm font-medium text-gray-500 bg-white hover:bg-gray-50 transition-colors"
           >
             ✕ Reset
@@ -347,41 +368,46 @@ function DashboardInner() {
         )}
       </div>
 
-      {/* Table */}
+      {/* Table — 7 kolom utama; kolom tersembunyi (branchid, src_number, fee, txid, err_message) tampil di modal detail */}
       <div className="bg-white rounded-xl shadow-[0_4px_16px_rgba(16,24,40,0.06)] overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-[13px]">
             <thead>
               <tr className="bg-gray-50 text-left">
-                {CLEAN_COLUMNS.map((c) => (
-                  <th key={c.key} className="px-4 py-3.5 font-semibold text-xs text-gray-500 whitespace-nowrap">
-                    {c.label}
-                  </th>
-                ))}
+                <th className="px-4 py-3.5 font-semibold text-xs text-gray-500 whitespace-nowrap">corpid</th>
+                <th className="px-4 py-3.5 font-semibold text-xs text-gray-500 whitespace-nowrap">corpnm</th>
+                <th className="px-4 py-3.5 font-semibold text-xs text-gray-500 whitespace-nowrap text-right">amount</th>
+                <th className="px-4 py-3.5 font-semibold text-xs text-gray-500 whitespace-nowrap text-right">total</th>
+                <th className="px-4 py-3.5 font-semibold text-xs text-gray-500 whitespace-nowrap">product_name</th>
+                <th className="px-4 py-3.5 font-semibold text-xs text-gray-500 whitespace-nowrap">sts_trx</th>
+                <th className="px-4 py-3.5 font-semibold text-xs text-gray-500 whitespace-nowrap">tanggal</th>
+                <th className="px-4 py-3.5 w-10" />
               </tr>
             </thead>
             <tbody>
               {pageRows.length === 0 ? (
                 <tr>
-                  <td colSpan={12} className="px-4 py-16 text-center text-sm text-gray-400">
+                  <td colSpan={8} className="px-4 py-16 text-center text-sm text-gray-400">
                     Tidak ada data yang cocok dengan filter.
                   </td>
                 </tr>
               ) : (
                 pageRows.map((r, i) => (
-                  <tr key={i} className={i % 2 === 1 ? "bg-gray-50/60" : ""}>
+                  <tr
+                    key={i}
+                    className={`cursor-pointer group transition-colors ${i % 2 === 1 ? "bg-gray-50/60 hover:bg-blue-50/60" : "hover:bg-blue-50/40"}`}
+                    onClick={() => setSelectedRow(r)}
+                  >
                     <td className="px-4 py-3 font-medium text-gray-900 whitespace-nowrap">{r.corpid}</td>
-                    <td className="px-4 py-3 text-gray-700 max-w-44 truncate" title={r.corpnm}>{r.corpnm}</td>
-                    <td className="px-4 py-3 text-gray-500">{r.branchid}</td>
-                    <td className="px-4 py-3 text-gray-500 whitespace-nowrap">{r.src_number}</td>
+                    <td className="px-4 py-3 text-gray-700 max-w-52 truncate" title={r.corpnm}>{r.corpnm}</td>
                     <td className="px-4 py-3 font-semibold text-gray-900 text-right whitespace-nowrap">{formatRupiah(r.amount)}</td>
-                    <td className="px-4 py-3 text-gray-700 text-right whitespace-nowrap">{formatRupiah(r.fee)}</td>
                     <td className="px-4 py-3 font-semibold text-gray-900 text-right whitespace-nowrap">{formatRupiah(r.total)}</td>
                     <td className="px-4 py-3 text-gray-700 max-w-44 truncate" title={r.product_name}>{r.product_name}</td>
                     <td className="px-4 py-3"><StatusBadge status={r.sts_trx} /></td>
-                    <td className="px-4 py-3 text-gray-500 max-w-24 truncate" title={r.txid}>{r.txid || "–"}</td>
-                    <td className="px-4 py-3 text-gray-500 max-w-36 truncate" title={r.err_message}>{r.err_message || "–"}</td>
                     <td className="px-4 py-3 text-gray-500 whitespace-nowrap">{formatTanggal(r.tanggal)}</td>
+                    <td className="px-4 py-3 text-right">
+                      <span className="text-[12px] font-semibold text-gray-400 group-hover:text-brand-blue transition-colors whitespace-nowrap">Detail</span>
+                    </td>
                   </tr>
                 ))
               )}
@@ -396,6 +422,8 @@ function DashboardInner() {
           <Pagination page={page} totalPages={totalPages} onChange={setPage} />
         </div>
       </div>
+
+      <RowDetailModal row={selectedRow} onClose={() => setSelectedRow(null)} />
     </div>
   );
 }
@@ -434,6 +462,92 @@ function FilterSelect({
         </option>
       ))}
     </select>
+  );
+}
+
+// ===== Modal detail baris =====
+function DetailField({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+  return (
+    <div className="flex flex-col gap-0.5">
+      <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">{label}</span>
+      <span className={`text-sm text-gray-800 break-all ${mono ? "font-mono" : ""}`}>{value || "–"}</span>
+    </div>
+  );
+}
+
+function RowDetailModal({ row, onClose }: { row: CleanRow | null; onClose: () => void }) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
+
+  useEffect(() => {
+    if (!row) return;
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [row, onClose]);
+
+  if (!row || !mounted) return null;
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[9999] flex items-center justify-center px-4"
+      style={{ background: "rgba(0,0,0,0.4)", backdropFilter: "blur(3px)" }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl animate-[fadeInScale_0.18s_ease] overflow-hidden">
+        {/* Header */}
+        <div className="flex items-start justify-between px-7 pt-6 pb-4 border-b border-gray-100">
+          <div>
+            <p className="font-bold text-gray-900 text-base leading-tight">{row.corpnm || row.corpid}</p>
+            <p className="text-xs text-gray-400 mt-0.5">{formatTanggal(row.tanggal)}</p>
+          </div>
+          <button
+            onClick={onClose}
+            className="w-8 h-8 rounded-lg hover:bg-gray-100 flex items-center justify-center transition-colors ml-4 shrink-0"
+            aria-label="Tutup"
+          >
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <path d="M2 2l10 10M12 2L2 12" stroke="#6b7280" strokeWidth="1.8" strokeLinecap="round" />
+            </svg>
+          </button>
+        </div>
+
+        {/* Status + nominal */}
+        <div className="flex items-center gap-4 px-7 py-4 bg-gray-50 border-b border-gray-100">
+          <StatusBadge status={row.sts_trx} />
+          <div className="flex-1 min-w-0" />
+          <div className="text-right">
+            <p className="text-[11px] text-gray-400 font-semibold uppercase tracking-wide">Total</p>
+            <p className="text-xl font-bold text-gray-900">{formatRupiah(row.total)}</p>
+          </div>
+        </div>
+
+        {/* Isi detail — 2 kolom grid */}
+        <div className="px-7 py-5 grid grid-cols-2 gap-x-8 gap-y-5">
+          <DetailField label="corpid" value={row.corpid} mono />
+          <DetailField label="branchid" value={row.branchid} mono />
+          <DetailField label="corpnm" value={row.corpnm} />
+          <DetailField label="src_number" value={row.src_number} mono />
+          <DetailField label="product_name" value={row.product_name} />
+          <DetailField label="Kanal / txid" value={row.txid} mono />
+          <DetailField label="Amount" value={formatRupiah(row.amount)} />
+          <DetailField label="Fee" value={formatRupiah(row.fee)} />
+          <div className="col-span-2">
+            <DetailField label="Pesan Error" value={row.err_message} />
+          </div>
+        </div>
+
+        <div className="px-7 pb-6">
+          <button
+            onClick={onClose}
+            className="w-full py-2.5 rounded-xl text-sm font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 transition-colors"
+          >
+            Tutup
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
   );
 }
 

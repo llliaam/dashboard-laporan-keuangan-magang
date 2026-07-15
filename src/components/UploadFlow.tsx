@@ -110,24 +110,66 @@ export default function UploadFlow({ fileType, onFileTypeChange, onConverted, on
     if (state.status !== "ready") return;
     const { file, buffer } = state;
     setState({ status: "converting", file });
-    // beri waktu browser paint spinner sebelum parsing (blocking) berjalan
-    setTimeout(() => {
-      try {
-        const result =
-          typeof buffer === "string" ? parseCsvText(buffer) : parseWorkbook(buffer);
+
+    const isCsv = typeof buffer === "string";
+
+    // Coba jalankan di Web Worker; fallback sync jika Worker tidak tersedia
+    // (mis. environment tanpa Worker support seperti beberapa mode test).
+    let worker: Worker | null = null;
+    try {
+      worker = new Worker(new URL("../lib/parse.worker.ts", import.meta.url));
+    } catch {
+      worker = null;
+    }
+
+    if (worker) {
+      const w = worker;
+      w.onmessage = (e: MessageEvent) => {
+        w.terminate();
+        const msg = e.data as
+          | { ok: true; result: import("@/lib/types").ParseResult }
+          | { ok: false; error: string };
+        if (!msg.ok) {
+          setState({ status: "failed", file });
+          setInvalidMsg(msg.error);
+          onConvertFailed(file.name, msg.error);
+          return;
+        }
+        const { result } = msg;
         if (result.rows.length === 0) {
-          throw new Error(
-            "Tidak ada baris valid. Pastikan sheet 'Data Transaksi' berisi data pipe-delimited (|)."
-          );
+          const emptyMsg = "Tidak ada baris valid. Pastikan sheet 'Data Transaksi' berisi data pipe-delimited (|).";
+          setState({ status: "failed", file });
+          setInvalidMsg(emptyMsg);
+          onConvertFailed(file.name, emptyMsg);
+          return;
         }
         onConverted(result, file.name);
-      } catch (err) {
+      };
+      w.onerror = (ev) => {
+        w.terminate();
+        const msg = ev.message ?? "Worker error saat konversi.";
         setState({ status: "failed", file });
-        const msg = err instanceof Error ? err.message : "Konversi gagal.";
         setInvalidMsg(msg);
         onConvertFailed(file.name, msg);
-      }
-    }, 80);
+      };
+      w.postMessage({ type: isCsv ? "csv" : "xlsx", data: buffer, fileType });
+    } else {
+      // fallback sync (bisa blokir UI untuk file besar)
+      setTimeout(() => {
+        try {
+          const result = isCsv ? parseCsvText(buffer as string) : parseWorkbook(buffer as ArrayBuffer);
+          if (result.rows.length === 0) {
+            throw new Error("Tidak ada baris valid. Pastikan sheet 'Data Transaksi' berisi data pipe-delimited (|).");
+          }
+          onConverted(result, file.name);
+        } catch (err) {
+          setState({ status: "failed", file });
+          const msg = err instanceof Error ? err.message : "Konversi gagal.";
+          setInvalidMsg(msg);
+          onConvertFailed(file.name, msg);
+        }
+      }, 80);
+    }
   };
 
   const isConverting = state.status === "converting";

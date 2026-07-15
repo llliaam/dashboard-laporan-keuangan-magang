@@ -1,5 +1,8 @@
 "use client";
 
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
+
 interface Props {
   open: boolean;
   title: string;
@@ -21,10 +24,14 @@ export default function ConfirmDialog({
   onConfirm,
   onCancel,
 }: Props) {
-  if (!open) return null;
-  return (
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
+
+  if (!open || !mounted) return null;
+
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center"
+      className="fixed inset-0 z-[9999] flex items-center justify-center"
       style={{ background: "rgba(0,0,0,0.35)", backdropFilter: "blur(2px)" }}
       onClick={(e) => {
         if (e.target === e.currentTarget) onCancel();
@@ -59,6 +66,7 @@ export default function ConfirmDialog({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
