@@ -441,27 +441,106 @@ function FilterSelect({
   options: string[];
   labels?: Record<string, string>;
 }) {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
+  const containerRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  // Tutup saat klik di luar
+  useEffect(() => {
+    if (!open) return;
+    const h = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+        setQ("");
+      }
+    };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, [open]);
+
+  // Fokus search saat buka
+  useEffect(() => {
+    if (open) setTimeout(() => searchRef.current?.focus(), 30);
+    else setQ("");
+  }, [open]);
+
+  const filtered = q.trim()
+    ? options.filter((o) => (labels?.[o] ?? o).toLowerCase().includes(q.toLowerCase()))
+    : options;
+
+  const displayLabel = value ? (labels?.[value] ?? value) : placeholder;
+
   return (
-    <select
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      className={`h-[50px] px-4 pr-9 rounded-[10px] bg-white text-sm outline-none focus:ring-2 focus:ring-brand-blue/30 appearance-none cursor-pointer max-w-56 ${
-        value ? "text-gray-800 font-medium" : "text-gray-400"
-      }`}
-      style={{
-        backgroundImage:
-          "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' stroke='%239ca3af' stroke-width='1.5' fill='none' stroke-linecap='round'/></svg>\")",
-        backgroundRepeat: "no-repeat",
-        backgroundPosition: "right 14px center",
-      }}
-    >
-      <option value="">{placeholder}</option>
-      {options.map((o) => (
-        <option key={o} value={o}>
-          {labels?.[o] ?? o}
-        </option>
-      ))}
-    </select>
+    <div ref={containerRef} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className={`flex items-center gap-2 h-[50px] pl-4 pr-3 rounded-[10px] bg-white text-sm outline-none focus:ring-2 focus:ring-brand-blue/30 cursor-pointer max-w-56 min-w-36 ${
+          value ? "text-gray-800 font-medium" : "text-gray-400"
+        }`}
+      >
+        <span className="flex-1 text-left truncate">{displayLabel}</span>
+        <svg width="10" height="6" viewBox="0 0 10 6" fill="none" className={`shrink-0 transition-transform ${open ? "rotate-180" : ""}`}>
+          <path d="M1 1l4 4 4-4" stroke="#9ca3af" strokeWidth="1.5" strokeLinecap="round" fill="none" />
+        </svg>
+      </button>
+
+      {open && (
+        <div className="absolute top-[calc(100%+6px)] left-0 z-50 w-64 bg-white rounded-xl shadow-xl border border-gray-100 py-2 flex flex-col">
+          {/* Search bar */}
+          <div className="px-3 pb-2">
+            <div className="relative">
+              <svg className="absolute left-3 top-1/2 -translate-y-1/2" width="13" height="13" viewBox="0 0 13 13" fill="none">
+                <circle cx="5.5" cy="5.5" r="4" stroke="#9ca3af" strokeWidth="1.4" />
+                <path d="M9 9L12 12" stroke="#9ca3af" strokeWidth="1.4" strokeLinecap="round" />
+              </svg>
+              <input
+                ref={searchRef}
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                placeholder="Cari..."
+                className="w-full h-9 pl-8 pr-3 rounded-lg bg-gray-50 text-[13px] text-gray-700 placeholder:text-gray-400 outline-none focus:ring-2 focus:ring-brand-blue/30"
+              />
+            </div>
+          </div>
+
+          {/* Option list */}
+          <div className="overflow-y-auto max-h-52">
+            {/* Opsi reset */}
+            <button
+              type="button"
+              onClick={() => { onChange(""); setOpen(false); setQ(""); }}
+              className={`w-full text-left px-4 py-2 text-[13px] transition-colors ${
+                !value ? "text-brand-blue font-semibold bg-blue-50" : "text-gray-400 hover:bg-gray-50"
+              }`}
+            >
+              {placeholder}
+            </button>
+
+            {filtered.length === 0 ? (
+              <p className="px-4 py-3 text-[13px] text-gray-400 text-center">Tidak ada hasil</p>
+            ) : (
+              filtered.map((o) => (
+                <button
+                  key={o}
+                  type="button"
+                  onClick={() => { onChange(o); setOpen(false); setQ(""); }}
+                  className={`w-full text-left px-4 py-2 text-[13px] truncate transition-colors ${
+                    o === value
+                      ? "text-brand-blue font-semibold bg-blue-50"
+                      : "text-gray-700 hover:bg-gray-50"
+                  }`}
+                  title={labels?.[o] ?? o}
+                >
+                  {labels?.[o] ?? o}
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
