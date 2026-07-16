@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { formatNumber, formatRupiahCompact } from "@/lib/format";
 import type { CleanRow } from "@/lib/types";
 
@@ -117,6 +117,19 @@ export default function BarChart({ rows }: Props) {
   const [granularity, setGranularity] = useState<Granularity>("Harian");
   const [metric, setMetric] = useState<Metric>("count");
   const [hover, setHover] = useState<number | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [containerW, setContainerW] = useState(736);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver((entries) => {
+      const w = entries[0]?.contentRect.width;
+      if (w) setContainerW(w);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   const display = useMemo(() => {
     const map = new Map<string, number>();
@@ -124,7 +137,7 @@ export default function BarChart({ rows }: Props) {
       const parsed = parseTanggal(r.tanggal);
       if (!parsed) continue;
       const key = bucketKey(parsed, granularity);
-      const val = metric === "nominal" ? r.total : 1;
+      const val = metric === "nominal" ? (Number(r.total) || 0) : 1;
       map.set(key, (map.get(key) ?? 0) + val);
     }
     return [...map.entries()]
@@ -137,12 +150,15 @@ export default function BarChart({ rows }: Props) {
       }));
   }, [rows, granularity, metric]);
 
-  const W = 800;
   const H = 240;
   const mL = 56;
   const mB = 26;
-  const innerW = W - mL - 8;
+  const MIN_SLOT = 14; // px minimum per slot agar bar tidak invisible
   const innerH = H - mB - 6;
+
+  // W = lebar container aktual (stretch) atau lebih lebar jika bucket banyak (scroll)
+  const W = Math.max(containerW, mL + 8 + display.length * MIN_SLOT);
+  const innerW = W - mL - 8;
 
   const maxV = display.reduce((m, d) => (d.value > m ? d.value : m), 1);
   const step = niceStep(maxV / 4);
@@ -151,7 +167,7 @@ export default function BarChart({ rows }: Props) {
   for (let v = 0; v <= axisMax; v += step) ticks.push(v);
 
   const slot = display.length > 0 ? innerW / display.length : innerW;
-  const bw = Math.min(40, slot * 0.62);
+  const bw = Math.max(2, slot * 0.62);
   const maxIdx = display.length > 0
     ? display.reduce((mi, d, i) => (d.value > display[mi].value ? i : mi), 0)
     : -1;
@@ -200,8 +216,14 @@ export default function BarChart({ rows }: Props) {
           Tidak ada data pada rentang waktu ini
         </div>
       ) : (
-        <div className="relative">
-          <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img" aria-label="Volume transaksi">
+        <div className="overflow-x-auto min-w-0" ref={containerRef}>
+          <svg
+            width={W}
+            height={H}
+            style={{ display: "block" }}
+            role="img"
+            aria-label="Volume transaksi"
+          >
             {/* Grid + Y-axis labels */}
             {ticks.map((v) => {
               const y = 6 + innerH - (v / axisMax) * innerH;
@@ -254,26 +276,27 @@ export default function BarChart({ rows }: Props) {
                 </g>
               );
             })}
-          </svg>
 
-          {/* Tooltip */}
-          {hover !== null && display[hover] && (
-            <div
-              className="absolute pointer-events-none bg-gray-900 text-white rounded-lg px-3 py-2 text-xs shadow-lg z-10"
-              style={{
-                left: `${Math.min(90, Math.max(10, ((mL + hover * slot + slot / 2) / W) * 100))}%`,
-                top: 0,
-                transform: "translate(-50%, 8px)",
-              }}
-            >
-              <p className="text-gray-400 whitespace-nowrap">{display[hover].tooltip}</p>
-              <p className="font-semibold text-[13px] whitespace-nowrap">
-                {metric === "nominal"
-                  ? formatRupiahCompact(display[hover].value)
-                  : `${formatNumber(display[hover].value)} transaksi`}
-              </p>
-            </div>
-          )}
+            {/* Tooltip — SVG native agar ikut scroll container */}
+            {hover !== null && display[hover] && (() => {
+              const tx = mL + hover * slot + slot / 2;
+              const ty = 8;
+              const label1 = display[hover].tooltip;
+              const label2 = metric === "nominal"
+                ? formatRupiahCompact(display[hover].value)
+                : `${formatNumber(display[hover].value)} transaksi`;
+              const boxW = Math.max(label1.length, label2.length) * 7 + 24;
+              const boxH = 44;
+              const clampedX = Math.min(W - boxW / 2 - 8, Math.max(boxW / 2 + 8, tx));
+              return (
+                <g transform={`translate(${clampedX},${ty})`} style={{ pointerEvents: "none" }}>
+                  <rect x={-boxW / 2} y={0} width={boxW} height={boxH} rx={8} fill="#111827" />
+                  <text x={0} y={16} textAnchor="middle" fontSize={10} fill="#9ca3af">{label1}</text>
+                  <text x={0} y={32} textAnchor="middle" fontSize={12} fontWeight="600" fill="white">{label2}</text>
+                </g>
+              );
+            })()}
+          </svg>
         </div>
       )}
     </div>
