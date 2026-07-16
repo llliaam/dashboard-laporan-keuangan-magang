@@ -1,8 +1,8 @@
 import * as XLSX from "xlsx";
 import type { CleanRow, ParseResult } from "./types";
 
-// Urutan kolom pada data MENTAH (pipe-delimited, per CLAUDE.md):
-// corpid | corpnm | src_number | branchid | amount | fee | total | product_name | sts_trx | txid | err_message | tanggal
+// Urutan kolom pada data MENTAH (pipe-delimited, per file aktual):
+// corpid | corpnm | branchid | src_number | amount | fee | total | product_name | sts_trx | txid | err_message | tanggal
 const RAW_COL_COUNT = 12;
 
 // Nama sheet yang dicari per jenis file.
@@ -60,8 +60,7 @@ function toNumber(v: string): number {
 }
 
 // Transformasi satu baris mentah -> CleanRow, atau null jika baris invalid.
-// Langkah 1 (split |), 2 (strip quotes), 3 (reorder src_number<->branchid),
-// 6 (buang baris kosong / corpid kosong / kolom kurang).
+// Langkah 1 (split |), 2 (strip quotes), 6 (buang baris kosong / corpid kosong / kolom kurang).
 export function parseRawLine(line: string): CleanRow | null {
   if (!line || !line.trim()) return null;
   const parts = line.split("|");
@@ -75,8 +74,8 @@ export function parseRawLine(line: string): CleanRow | null {
   return {
     corpid,
     corpnm: stripQuotes(parts[1]),
-    branchid: stripQuotes(parts[3]), // reorder: branchid (raw idx 3) -> posisi 3 bersih
-    src_number: stripQuotes(parts[2]), // src_number (raw idx 2) -> posisi 4 bersih
+    branchid: stripQuotes(parts[2]),
+    src_number: stripQuotes(parts[3]),
     amount: toNumber(parts[4]),
     fee: toNumber(parts[5]),
     total: toNumber(parts[6]),

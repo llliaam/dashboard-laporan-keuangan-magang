@@ -8,12 +8,16 @@ interface Segment {
   count: number;
 }
 
-// Warna status: hijau=sukses, merah=failed, oranye=reject, biru=lainnya.
+// Warna status: hijau=sukses, merah=failed, oranye=reject, kuning=waspada, biru=lainnya.
 function colorFor(label: string, idx: number): string {
   const s = label.toUpperCase();
   if (s === "RELEASED" || s === "SUCCESS" || s === "APPROVED") return "#00AA42";
   if (s === "FAILED" || s === "ERROR") return "#E02D0D";
   if (s === "REJECT" || s === "REJECTED") return "#F9A13F";
+  // Zona % sukses dari successZones()
+  if (s.startsWith("SEHAT")) return "#00AA42";
+  if (s.startsWith("WASPADA")) return "#F9A13F";
+  if (s.startsWith("KRITIS")) return "#E02D0D";
   const rest = ["#2353B9", "#7C3AED", "#0E9F8A"];
   return rest[idx % rest.length];
 }

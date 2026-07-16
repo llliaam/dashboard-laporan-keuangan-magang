@@ -7,7 +7,9 @@ import KpiCard from "@/components/KpiCard";
 import Pagination from "@/components/Pagination";
 import { PctBadge } from "@/components/Badges";
 import type { CleanRow, InstansiAggregate } from "@/lib/types";
-import { aggregateByInstansi } from "@/lib/aggregate";
+import { aggregateByInstansi, aggregateByKanal, successZones } from "@/lib/aggregate";
+import DonutChart from "@/components/charts/DonutChart";
+import HBarChart from "@/components/charts/HBarChart";
 import { formatNumber, formatRupiahCompact } from "@/lib/format";
 import { getActiveId } from "@/lib/history";
 import { loadDataset } from "@/lib/db";
@@ -37,6 +39,16 @@ export default function AnalitikPage() {
   }, []);
 
   const aggregates = useMemo(() => (rows ? aggregateByInstansi(rows) : []), [rows]);
+  const kanalAggregates = useMemo(() => (rows ? aggregateByKanal(rows) : []), [rows]);
+  const zones = useMemo(() => successZones(aggregates), [aggregates]);
+  const topInstansi = useMemo(
+    () =>
+      [...aggregates]
+        .sort((a, b) => b.totalNominal - a.totalNominal)
+        .slice(0, 10)
+        .map((a) => ({ label: a.corpnm || a.corpid, value: a.totalNominal, sublabel: a.corpid })),
+    [aggregates]
+  );
 
   const kpi = useMemo(() => {
     const totalInstansi = aggregates.length;
@@ -153,6 +165,60 @@ export default function AnalitikPage() {
             label="Instansi Perlu Atensi" value={formatNumber(kpi.attention)}
             caption={`Sukses < ${ATTENTION_THRESHOLD}%`}
           />
+        </div>
+
+        {/* Chart insight — Top 10 + Zona % Sukses */}
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+          <div className="bg-white rounded-xl shadow-[0_4px_16px_rgba(16,24,40,0.06)] p-5">
+            <p className="text-[14px] font-semibold text-gray-800 mb-4">Top 10 Instansi — Total Nominal</p>
+            <HBarChart data={topInstansi} formatValue={formatRupiahCompact} />
+          </div>
+          <div className="bg-white rounded-xl shadow-[0_4px_16px_rgba(16,24,40,0.06)] p-5">
+            <p className="text-[14px] font-semibold text-gray-800 mb-1">Sebaran Zona % Sukses</p>
+            <p className="text-[11px] text-gray-400 mb-4">
+              Sehat ≥90% · Waspada 70–89% · Kritis &lt;70%
+            </p>
+            <DonutChart data={zones} />
+          </div>
+        </div>
+
+        {/* Tabel analisis per kanal */}
+        <div className="bg-white rounded-xl shadow-[0_4px_16px_rgba(16,24,40,0.06)] overflow-hidden">
+          <div className="px-5 py-4 border-b border-gray-100">
+            <p className="text-[14px] font-semibold text-gray-800">Analisis per Kanal Transaksi</p>
+            <p className="text-[11px] text-gray-400 mt-0.5">Dikelompokkan berdasarkan product_name</p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-[13px]">
+              <thead>
+                <tr className="bg-gray-50 text-left">
+                  <th className="px-5 py-3.5 font-semibold text-xs text-gray-500">Kanal</th>
+                  <th className="px-4 py-3.5 font-semibold text-xs text-gray-500 text-right">Jml Transaksi</th>
+                  <th className="px-4 py-3.5 font-semibold text-xs text-gray-500 text-right">Total Nominal</th>
+                  <th className="px-4 py-3.5 font-semibold text-xs text-gray-500 text-right">Avg Ticket</th>
+                  <th className="px-4 py-3.5 font-semibold text-xs text-gray-500 text-center">% Sukses</th>
+                </tr>
+              </thead>
+              <tbody>
+                {kanalAggregates.map((k, i) => (
+                  <tr key={k.kanal} className={i % 2 === 1 ? "bg-gray-50/60" : ""}>
+                    <td className="px-5 py-3.5 font-medium text-gray-800 max-w-60 truncate" title={k.kanal}>{k.kanal}</td>
+                    <td className="px-4 py-3.5 text-gray-700 text-right">{formatNumber(k.count)}</td>
+                    <td className="px-4 py-3.5 font-semibold text-gray-900 text-right whitespace-nowrap">{formatRupiahCompact(k.totalNominal)}</td>
+                    <td className="px-4 py-3.5 text-gray-700 text-right whitespace-nowrap">{formatRupiahCompact(k.avgTicket)}</td>
+                    <td className="px-4 py-3.5 text-center"><PctBadge pct={k.pctSuccess} /></td>
+                  </tr>
+                ))}
+                {kanalAggregates.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="px-5 py-12 text-center text-sm text-gray-400">
+                      Tidak ada data kanal.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
 
         {/* Search + sort */}

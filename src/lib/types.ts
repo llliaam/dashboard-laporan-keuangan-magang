@@ -58,3 +58,13 @@ export interface InstansiAggregate {
   failed: number;
   pctSuccess: number; // 0-100
 }
+
+export interface KanalAggregate {
+  kanal: string;
+  count: number;
+  totalNominal: number;
+  success: number;
+  failed: number;
+  pctSuccess: number; // 0-100
+  avgTicket: number;  // totalNominal / count
+}
