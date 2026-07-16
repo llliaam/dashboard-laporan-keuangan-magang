@@ -118,24 +118,53 @@ function findSheet(wb: XLSX.WorkBook, fileType: string): string {
   return found ?? wb.SheetNames[0];
 }
 
+const pad2 = (n: number) => String(n).padStart(2, "0");
+
+// Ubah satu cell Excel jadi string yang mempertahankan NILAI ASLI:
+// - Numerik biasa (txid, amount, dst.) -> nilai penuh, bukan teks terformat.
+//   Contoh: txid 202501016975 (jangan sampai jadi scientific "2.02501E+11"),
+//   amount 43000000 (bukan "Rp43,000,000").
+// - Numerik bertipe tanggal (serial Excel, mis. 45658.25) -> "YYYY-MM-DD HH:MM:SS"
+//   via SSF.parse_date_code (wall-clock, TZ-independent — TIDAK bergeser timezone
+//   seperti cellDates/objek Date). Format ini yang dipahami formatTanggal().
+// - String (mis. sheet mentah 1-kolom pipe-delimited) -> apa adanya.
+function cellToText(cell: XLSX.CellObject | undefined): string {
+  if (cell == null || cell.v == null) return "";
+  if (cell.t === "n") {
+    if (cell.z && XLSX.SSF.is_date(cell.z)) {
+      const d = XLSX.SSF.parse_date_code(cell.v as number);
+      if (d) return `${d.y}-${pad2(d.m)}-${pad2(d.d)} ${pad2(d.H)}:${pad2(d.M)}:${pad2(d.S)}`;
+    }
+    // String(number) menjaga integer besar (<=12 digit di data ini) tetap presisi penuh.
+    return String(cell.v);
+  }
+  return String(cell.v);
+}
+
 // Baca workbook Excel: ambil sheet sesuai fileType, fallback sheet pertama.
-// Data mentah = 1 kolom tunggal di kolom A, baris 1 header.
+// Dua bentuk input didukung:
+//   1. Sheet mentah 1-kolom pipe-delimited (kolom A) -> satu cell string per baris.
+//   2. Sheet 12-kolom terpisah -> tiap field cell sendiri, digabung ulang dgn '|'.
+// cellNF:true agar cell.z (number-format) tersedia untuk deteksi kolom tanggal.
+// Baca per-cell (bukan sheet_to_json{raw:false}) supaya nilai numerik ASLI dipakai,
+// bukan teks terformat — kunci perbaikan txid scientific & amount.
 export function parseWorkbook(data: ArrayBuffer, fileType = "Laporan Transaksi"): ParseResult {
-  const wb = XLSX.read(data, { type: "array" });
+  const wb = XLSX.read(data, { type: "array", cellNF: true });
   const sheetName = findSheet(wb, fileType);
   if (!sheetName) throw new Error("File tidak memiliki sheet.");
   const sheet = wb.Sheets[sheetName];
+  if (!sheet["!ref"]) throw new Error("Sheet kosong atau hanya berisi header.");
 
-  // header:1 -> array of arrays; kolom A = index 0.
-  const aoa = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, raw: false, defval: "" });
-  if (aoa.length < 2) throw new Error("Sheet kosong atau hanya berisi header.");
+  const range = XLSX.utils.decode_range(sheet["!ref"]);
+  if (range.e.r < 1) throw new Error("Sheet kosong atau hanya berisi header.");
 
   const lines: string[] = [];
-  for (let i = 1; i < aoa.length; i++) {
-    // Baris bisa terpecah ke beberapa cell jika Excel memisahkan '|' — gabung kembali.
-    const cells = aoa[i] as unknown[];
-    const line = cells.map((c) => String(c ?? "")).join("|").replace(/\|+$/, "");
-    lines.push(line);
+  for (let r = range.s.r + 1; r <= range.e.r; r++) {
+    const cells: string[] = [];
+    for (let c = range.s.c; c <= range.e.c; c++) {
+      cells.push(cellToText(sheet[XLSX.utils.encode_cell({ r, c })] as XLSX.CellObject | undefined));
+    }
+    lines.push(cells.join("|"));
   }
   return parseRawLines(lines);
 }

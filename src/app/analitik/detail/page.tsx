@@ -108,12 +108,12 @@ function AnalitikDetailInner() {
   const corpnm = instansiRows[0]?.corpnm ?? corpidParam;
 
   const statusOptions = useMemo(
-    () => [...new Set(instansiRows.map((r) => r.sts_trx).filter(Boolean))].sort(),
-    [instansiRows]
+    () => [...new Set((allRows ?? []).map((r) => r.sts_trx).filter(Boolean))].sort(),
+    [allRows]
   );
   const kanalOptions = useMemo(
-    () => [...new Set(instansiRows.map((r) => r.product_name).filter(Boolean))].sort(),
-    [instansiRows]
+    () => [...new Set((allRows ?? []).map((r) => r.product_name).filter(Boolean))].sort(),
+    [allRows]
   );
 
   const kpi = useMemo(() => {
