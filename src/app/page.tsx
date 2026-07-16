@@ -796,6 +796,7 @@ function RowFormModal({
   // date dan time terpisah
   const [dateStr, setDateStr] = useState("");
   const [timeStr, setTimeStr] = useState("");
+  const [submitted, setSubmitted] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -806,6 +807,7 @@ function RowFormModal({
       const { date, time } = splitTanggal(base.tanggal);
       setDateStr(date);
       setTimeStr(time);
+      setSubmitted(false);
     }
   }, [isOpen, initial]);
 
@@ -845,18 +847,45 @@ function RowFormModal({
     setForm((f) => ({ ...f, tanggal: joinTanggal(dateStr, v) }));
   };
 
+  const txidRequired = form.sts_trx !== "REJECT";
+  const errMsgRequired = form.sts_trx === "FAILED";
+
+  const errors = {
+    corpid:       !form.corpid.trim()       ? "corpid wajib diisi" : "",
+    branchid:     !form.branchid.trim()     ? "branchid wajib diisi" : "",
+    corpnm:       !form.corpnm.trim()       ? "corpnm wajib diisi" : "",
+    src_number:   !form.src_number.trim()   ? "src_number wajib diisi" : "",
+    txid:         txidRequired && !form.txid.trim() ? "txid wajib diisi (kosong hanya jika status REJECT)" : "",
+    product_name: !form.product_name.trim() ? "product_name wajib diisi" : "",
+    sts_trx:      !form.sts_trx            ? "pilih status transaksi" : "",
+    tanggal:      !dateStr                  ? "tanggal wajib diisi" : "",
+    waktu:        !timeStr                  ? "waktu wajib diisi" : "",
+    amount:       form.amount <= 0          ? "amount harus lebih dari 0" : "",
+    err_message:  errMsgRequired && !form.err_message.trim() ? "err_message wajib diisi jika status FAILED" : "",
+  };
+
+  const hasError = Object.values(errors).some(Boolean);
+
   const handleSubmit = (e: React.SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!form.corpid.trim()) return;
+    setSubmitted(true);
+    if (hasError) return;
     onSubmit({ ...form, total: form.amount + form.fee });
   };
 
-  const inputCls = (mono = false) =>
-    `w-full h-9 px-3 rounded-lg border border-gray-200 bg-gray-50 text-sm text-gray-800 outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue/50${mono ? " font-mono" : ""}`;
+  const inputCls = (mono = false, error = false) =>
+    `w-full h-9 px-3 rounded-lg border text-sm text-gray-800 outline-none focus:ring-2 transition-colors ${
+      error
+        ? "border-red-400 bg-red-50 focus:ring-red-300/40 focus:border-red-400"
+        : "border-gray-200 bg-gray-50 focus:ring-brand-blue/30 focus:border-brand-blue/50"
+    }${mono ? " font-mono" : ""}`;
 
   const Label = ({ children }: { children: React.ReactNode }) => (
     <label className="block text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-1">{children}</label>
   );
+
+  const ErrMsg = ({ msg }: { msg: string }) =>
+    submitted && msg ? <p className="mt-1 text-[11px] text-red-500">{msg}</p> : null;
 
   return createPortal(
     <div
@@ -882,7 +911,8 @@ function RowFormModal({
               <Label>corpid *</Label>
               <input inputMode="numeric" pattern="[0-9]*" value={form.corpid}
                 onChange={(e) => setStr("corpid", e.target.value.replace(/[^0-9]/g, ""))}
-                className={inputCls(true)} required />
+                className={inputCls(true, submitted && !!errors.corpid)} />
+              <ErrMsg msg={errors.corpid} />
             </div>
 
             {/* branchid */}
@@ -890,13 +920,16 @@ function RowFormModal({
               <Label>branchid</Label>
               <input inputMode="numeric" pattern="[0-9]*" value={form.branchid}
                 onChange={(e) => setStr("branchid", e.target.value.replace(/[^0-9]/g, ""))}
-                className={inputCls(true)} />
+                className={inputCls(true, submitted && !!errors.branchid)} />
+              <ErrMsg msg={errors.branchid} />
             </div>
 
             {/* corpnm */}
             <div className="col-span-2">
               <Label>corpnm</Label>
-              <input value={form.corpnm} onChange={(e) => setStr("corpnm", e.target.value)} className={inputCls()} />
+              <input value={form.corpnm} onChange={(e) => setStr("corpnm", e.target.value)}
+                className={inputCls(false, submitted && !!errors.corpnm)} />
+              <ErrMsg msg={errors.corpnm} />
             </div>
 
             {/* src_number */}
@@ -904,45 +937,52 @@ function RowFormModal({
               <Label>src_number</Label>
               <input inputMode="numeric" pattern="[0-9]*" value={form.src_number}
                 onChange={(e) => setStr("src_number", e.target.value.replace(/[^0-9]/g, ""))}
-                className={inputCls(true)} />
+                className={inputCls(true, submitted && !!errors.src_number)} />
+              <ErrMsg msg={errors.src_number} />
             </div>
 
             {/* txid */}
             <div>
-              <Label>txid</Label>
+              <Label>txid {form.sts_trx === "REJECT" && <span className="text-gray-400 normal-case">(opsional)</span>}</Label>
               <input inputMode="numeric" pattern="[0-9]*" value={form.txid}
                 onChange={(e) => setStr("txid", e.target.value.replace(/[^0-9]/g, ""))}
-                className={inputCls(true)} />
+                className={inputCls(true, submitted && !!errors.txid)} />
+              <ErrMsg msg={errors.txid} />
             </div>
 
             {/* product_name */}
             <div>
               <Label>product_name</Label>
-              <input value={form.product_name} onChange={(e) => setStr("product_name", e.target.value)} className={inputCls()} />
+              <input value={form.product_name} onChange={(e) => setStr("product_name", e.target.value)}
+                className={inputCls(false, submitted && !!errors.product_name)} />
+              <ErrMsg msg={errors.product_name} />
             </div>
 
             {/* sts_trx */}
             <div>
               <Label>sts_trx</Label>
               <select value={form.sts_trx} onChange={(e) => setStr("sts_trx", e.target.value)}
-                className={inputCls()}>
+                className={inputCls(false, submitted && !!errors.sts_trx)}>
                 <option value="">— Pilih status —</option>
                 {["RELEASED", "FAILED", "REJECT", "WAITING APPROVE", "SUSPECT", "ERROR"].map((s) => (
                   <option key={s} value={s}>{s}</option>
                 ))}
               </select>
+              <ErrMsg msg={errors.sts_trx} />
             </div>
 
             {/* tanggal: date + time */}
             <div>
               <Label>tanggal</Label>
               <input type="date" value={dateStr} onChange={(e) => handleDateChange(e.target.value)}
-                className={inputCls()} />
+                className={inputCls(false, submitted && !!errors.tanggal)} />
+              <ErrMsg msg={errors.tanggal} />
             </div>
             <div>
               <Label>waktu (HH:MM)</Label>
               <input type="time" value={timeStr} onChange={(e) => handleTimeChange(e.target.value)}
-                className={inputCls()} />
+                className={inputCls(false, submitted && !!errors.waktu)} />
+              <ErrMsg msg={errors.waktu} />
             </div>
 
             {/* amount */}
@@ -952,8 +992,9 @@ function RowFormModal({
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-400 pointer-events-none">Rp</span>
                 <input inputMode="numeric" value={amountStr}
                   onChange={(e) => handleAmountChange(e.target.value)}
-                  className={`${inputCls()} pl-8`} placeholder="0" />
+                  className={`${inputCls(false, submitted && !!errors.amount)} pl-8`} placeholder="0" />
               </div>
+              <ErrMsg msg={errors.amount} />
             </div>
 
             {/* fee */}
@@ -963,22 +1004,26 @@ function RowFormModal({
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-400 pointer-events-none">Rp</span>
                 <input inputMode="numeric" value={feeStr}
                   onChange={(e) => handleFeeChange(e.target.value)}
-                  className={`${inputCls()} pl-8`} placeholder="0" />
+                  className={`${inputCls(false)} pl-8`} placeholder="0" />
               </div>
             </div>
 
             {/* total — readonly, dihitung otomatis */}
             <div className="col-span-2">
               <Label>total (dihitung otomatis)</Label>
-              <div className={`${inputCls()} flex items-center text-gray-400 bg-gray-100 cursor-not-allowed`}>
+              <div className="w-full h-9 px-3 rounded-lg border border-gray-200 bg-gray-100 text-sm text-gray-400 flex items-center cursor-not-allowed">
                 Rp {(form.amount + form.fee).toLocaleString("id-ID") || "0"}
               </div>
             </div>
 
             {/* err_message */}
             <div className="col-span-2">
-              <Label>err_message</Label>
-              <input value={form.err_message} onChange={(e) => setStr("err_message", e.target.value)} className={inputCls()} />
+              <Label>
+                err_message {errMsgRequired && <span className="text-red-400 normal-case">* (wajib jika FAILED)</span>}
+              </Label>
+              <input value={form.err_message} onChange={(e) => setStr("err_message", e.target.value)}
+                className={inputCls(false, submitted && !!errors.err_message)} />
+              <ErrMsg msg={errors.err_message} />
             </div>
 
           </div>
