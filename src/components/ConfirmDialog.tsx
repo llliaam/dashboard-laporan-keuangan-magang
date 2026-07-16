@@ -38,8 +38,8 @@ export default function ConfirmDialog({
       }}
     >
       <div className="bg-white rounded-2xl px-10 py-8 flex flex-col items-center gap-4 w-full max-w-sm mx-4 shadow-2xl animate-[fadeInScale_0.18s_ease]">
-        <div className="w-16 h-16 rounded-full bg-red-100 flex items-center justify-center">
-          <div className="w-12 h-12 rounded-full bg-red-500 flex items-center justify-center">
+        <div className={`w-16 h-16 rounded-full flex items-center justify-center ${danger ? "bg-red-100" : "bg-blue-100"}`}>
+          <div className={`w-12 h-12 rounded-full flex items-center justify-center ${danger ? "bg-red-500" : "bg-brand-blue"}`}>
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
               <path d="M12 6v8M12 17v1" stroke="white" strokeWidth="2.5" strokeLinecap="round" />
             </svg>
@@ -52,7 +52,11 @@ export default function ConfirmDialog({
         <div className="flex gap-3 w-full pt-1">
           <button
             onClick={onCancel}
-            className="flex-1 py-3 rounded-xl font-bold text-red-500 border-2 border-red-400 hover:bg-red-50 text-sm transition-colors"
+            className={`flex-1 py-3 rounded-xl font-bold border-2 text-sm transition-colors ${
+              danger
+                ? "text-red-500 border-red-400 hover:bg-red-50"
+                : "text-brand-blue border-brand-blue/40 hover:bg-blue-50"
+            }`}
           >
             {cancelLabel}
           </button>

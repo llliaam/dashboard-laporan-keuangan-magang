@@ -43,6 +43,7 @@ function DashboardInner() {
   const [createOpen, setCreateOpen] = useState(false);
   const [editRow, setEditRow] = useState<CleanRow | null>(null);
   const [deleteRow, setDeleteRow] = useState<CleanRow | null>(null);
+  const [newConversionConfirm, setNewConversionConfirm] = useState(false);
 
   // Drill-down dari halaman Analitik: /?corpid=XXX.
   // Pola "adjust state during render": saat param berubah, terapkan sebagai filter instansi.
@@ -277,7 +278,7 @@ function DashboardInner() {
         </div>
         <div className="flex items-center gap-3">
           <button
-            onClick={handleNewConversion}
+            onClick={() => setNewConversionConfirm(true)}
             className="px-4 py-2.5 rounded-[10px] text-sm font-semibold text-brand-blue border border-brand-blue/30 bg-white hover:bg-blue-50 transition-colors"
           >
             + Konversi Baru
@@ -485,6 +486,18 @@ function DashboardInner() {
         open={createOpen}
         onClose={() => setCreateOpen(false)}
         onSubmit={(newRow) => { handleCreateRow(newRow); setCreateOpen(false); }}
+      />
+
+      {/* Konversi baru confirm */}
+      <ConfirmDialog
+        open={newConversionConfirm}
+        title="Mulai konversi baru?"
+        message="Data hasil konversi saat ini akan ditutup. Riwayat tetap tersimpan dan bisa dibuka kembali di halaman Riwayat."
+        confirmLabel="Lanjutkan"
+        cancelLabel="Batal"
+        danger={false}
+        onConfirm={() => { setNewConversionConfirm(false); handleNewConversion(); }}
+        onCancel={() => setNewConversionConfirm(false)}
       />
 
       {/* Delete confirm */}
@@ -739,6 +752,26 @@ const EMPTY_ROW: CleanRow = {
   tanggal: "",
 };
 
+// Format angka ke string rupiah untuk display di input (tanpa "Rp ")
+function fmtRupiahInput(n: number): string {
+  if (!n) return "";
+  return Math.round(n).toLocaleString("id-ID");
+}
+
+// Pisah tanggal "YYYY-MM-DD HH:MM:SS" / "YYYY-MM-DD HH:MM" jadi {date, time}
+function splitTanggal(raw: string): { date: string; time: string } {
+  const m = raw.match(/^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2})/);
+  if (m) return { date: m[1], time: m[2] };
+  const dateOnly = raw.match(/^(\d{4}-\d{2}-\d{2})$/);
+  if (dateOnly) return { date: dateOnly[1], time: "" };
+  return { date: "", time: "" };
+}
+
+function joinTanggal(date: string, time: string): string {
+  if (!date) return "";
+  return time ? `${date} ${time}:00` : `${date} 00:00:00`;
+}
+
 function RowFormModal({
   initial,
   open,
@@ -757,10 +790,23 @@ function RowFormModal({
   const isEdit = initial !== null;
 
   const [form, setForm] = useState<CleanRow>(EMPTY_ROW);
+  // Display strings untuk amount dan fee (format ribuan)
+  const [amountStr, setAmountStr] = useState("");
+  const [feeStr, setFeeStr] = useState("");
+  // date dan time terpisah
+  const [dateStr, setDateStr] = useState("");
+  const [timeStr, setTimeStr] = useState("");
 
-  // sync form to initial whenever modal opens
   useEffect(() => {
-    if (isOpen) setForm(initial ?? EMPTY_ROW);
+    if (isOpen) {
+      const base = initial ?? EMPTY_ROW;
+      setForm(base);
+      setAmountStr(fmtRupiahInput(base.amount));
+      setFeeStr(fmtRupiahInput(base.fee));
+      const { date, time } = splitTanggal(base.tanggal);
+      setDateStr(date);
+      setTimeStr(time);
+    }
   }, [isOpen, initial]);
 
   useEffect(() => {
@@ -772,20 +818,50 @@ function RowFormModal({
 
   if (!isOpen || !mounted) return null;
 
-  const set = (k: keyof CleanRow, v: string) =>
-    setForm((f) => ({ ...f, [k]: ["amount", "fee", "total"].includes(k) ? Number(v) || 0 : v }));
+  const setStr = (k: keyof CleanRow, v: string) =>
+    setForm((f) => ({ ...f, [k]: v }));
+
+  const handleAmountChange = (v: string) => {
+    const digits = v.replace(/[^0-9]/g, "");
+    const n = digits ? Number(digits) : 0;
+    setAmountStr(n ? n.toLocaleString("id-ID") : "");
+    setForm((f) => ({ ...f, amount: n, total: n + f.fee }));
+  };
+
+  const handleFeeChange = (v: string) => {
+    const digits = v.replace(/[^0-9]/g, "");
+    const n = digits ? Number(digits) : 0;
+    setFeeStr(n ? n.toLocaleString("id-ID") : "");
+    setForm((f) => ({ ...f, fee: n, total: f.amount + n }));
+  };
+
+  const handleDateChange = (v: string) => {
+    setDateStr(v);
+    setForm((f) => ({ ...f, tanggal: joinTanggal(v, timeStr) }));
+  };
+
+  const handleTimeChange = (v: string) => {
+    setTimeStr(v);
+    setForm((f) => ({ ...f, tanggal: joinTanggal(dateStr, v) }));
+  };
 
   const handleSubmit = (e: React.SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!form.corpid.trim()) return;
-    onSubmit(form);
+    onSubmit({ ...form, total: form.amount + form.fee });
   };
+
+  const inputCls = (mono = false) =>
+    `w-full h-9 px-3 rounded-lg border border-gray-200 bg-gray-50 text-sm text-gray-800 outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue/50${mono ? " font-mono" : ""}`;
+
+  const Label = ({ children }: { children: React.ReactNode }) => (
+    <label className="block text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-1">{children}</label>
+  );
 
   return createPortal(
     <div
       className="fixed inset-0 z-[9999] flex items-center justify-center px-4"
       style={{ background: "rgba(0,0,0,0.4)", backdropFilter: "blur(3px)" }}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl animate-[fadeInScale_0.18s_ease] overflow-hidden">
         {/* Header */}
@@ -800,47 +876,120 @@ function RowFormModal({
 
         <form onSubmit={handleSubmit}>
           <div className="px-7 py-5 grid grid-cols-2 gap-x-5 gap-y-4 max-h-[60vh] overflow-y-auto">
-            {(
-              [
-                { key: "corpid", label: "corpid *", mono: true },
-                { key: "branchid", label: "branchid", mono: true },
-                { key: "corpnm", label: "corpnm", span: 2 },
-                { key: "src_number", label: "src_number", mono: true },
-                { key: "product_name", label: "product_name" },
-                { key: "sts_trx", label: "sts_trx" },
-                { key: "tanggal", label: "tanggal (YYYY-MM-DD HH:MM:SS)", span: 2 },
-                { key: "amount", label: "amount (angka)", num: true },
-                { key: "fee", label: "fee (angka)", num: true },
-                { key: "total", label: "total (angka)", num: true },
-                { key: "txid", label: "txid", mono: true },
-                { key: "err_message", label: "err_message", span: 2 },
-              ] as { key: keyof CleanRow; label: string; mono?: boolean; num?: boolean; span?: number }[]
-            ).map(({ key, label, mono, num, span }) => (
-              <div key={key} className={span === 2 ? "col-span-2" : ""}>
-                <label className="block text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-1">{label}</label>
-                <input
-                  type={num ? "number" : "text"}
-                  value={num ? (form[key] as number) : (form[key] as string)}
-                  onChange={(e) => set(key, e.target.value)}
-                  className={`w-full h-9 px-3 rounded-lg border border-gray-200 bg-gray-50 text-sm text-gray-800 outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue/50 ${mono ? "font-mono" : ""}`}
-                  required={key === "corpid"}
-                />
+
+            {/* corpid */}
+            <div>
+              <Label>corpid *</Label>
+              <input inputMode="numeric" pattern="[0-9]*" value={form.corpid}
+                onChange={(e) => setStr("corpid", e.target.value.replace(/[^0-9]/g, ""))}
+                className={inputCls(true)} required />
+            </div>
+
+            {/* branchid */}
+            <div>
+              <Label>branchid</Label>
+              <input inputMode="numeric" pattern="[0-9]*" value={form.branchid}
+                onChange={(e) => setStr("branchid", e.target.value.replace(/[^0-9]/g, ""))}
+                className={inputCls(true)} />
+            </div>
+
+            {/* corpnm */}
+            <div className="col-span-2">
+              <Label>corpnm</Label>
+              <input value={form.corpnm} onChange={(e) => setStr("corpnm", e.target.value)} className={inputCls()} />
+            </div>
+
+            {/* src_number */}
+            <div>
+              <Label>src_number</Label>
+              <input inputMode="numeric" pattern="[0-9]*" value={form.src_number}
+                onChange={(e) => setStr("src_number", e.target.value.replace(/[^0-9]/g, ""))}
+                className={inputCls(true)} />
+            </div>
+
+            {/* txid */}
+            <div>
+              <Label>txid</Label>
+              <input inputMode="numeric" pattern="[0-9]*" value={form.txid}
+                onChange={(e) => setStr("txid", e.target.value.replace(/[^0-9]/g, ""))}
+                className={inputCls(true)} />
+            </div>
+
+            {/* product_name */}
+            <div>
+              <Label>product_name</Label>
+              <input value={form.product_name} onChange={(e) => setStr("product_name", e.target.value)} className={inputCls()} />
+            </div>
+
+            {/* sts_trx */}
+            <div>
+              <Label>sts_trx</Label>
+              <select value={form.sts_trx} onChange={(e) => setStr("sts_trx", e.target.value)}
+                className={inputCls()}>
+                <option value="">— Pilih status —</option>
+                {["RELEASED", "FAILED", "REJECT", "WAITING APPROVE", "SUSPECT", "ERROR"].map((s) => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* tanggal: date + time */}
+            <div>
+              <Label>tanggal</Label>
+              <input type="date" value={dateStr} onChange={(e) => handleDateChange(e.target.value)}
+                className={inputCls()} />
+            </div>
+            <div>
+              <Label>waktu (HH:MM)</Label>
+              <input type="time" value={timeStr} onChange={(e) => handleTimeChange(e.target.value)}
+                className={inputCls()} />
+            </div>
+
+            {/* amount */}
+            <div>
+              <Label>amount (Rp)</Label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-400 pointer-events-none">Rp</span>
+                <input inputMode="numeric" value={amountStr}
+                  onChange={(e) => handleAmountChange(e.target.value)}
+                  className={`${inputCls()} pl-8`} placeholder="0" />
               </div>
-            ))}
+            </div>
+
+            {/* fee */}
+            <div>
+              <Label>fee (Rp)</Label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-400 pointer-events-none">Rp</span>
+                <input inputMode="numeric" value={feeStr}
+                  onChange={(e) => handleFeeChange(e.target.value)}
+                  className={`${inputCls()} pl-8`} placeholder="0" />
+              </div>
+            </div>
+
+            {/* total — readonly, dihitung otomatis */}
+            <div className="col-span-2">
+              <Label>total (dihitung otomatis)</Label>
+              <div className={`${inputCls()} flex items-center text-gray-400 bg-gray-100 cursor-not-allowed`}>
+                Rp {(form.amount + form.fee).toLocaleString("id-ID") || "0"}
+              </div>
+            </div>
+
+            {/* err_message */}
+            <div className="col-span-2">
+              <Label>err_message</Label>
+              <input value={form.err_message} onChange={(e) => setStr("err_message", e.target.value)} className={inputCls()} />
+            </div>
+
           </div>
 
           <div className="px-7 pb-6 pt-3 flex gap-3 border-t border-gray-100">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 transition-colors"
-            >
+            <button type="button" onClick={onClose}
+              className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 transition-colors">
               Batal
             </button>
-            <button
-              type="submit"
-              className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white bg-brand-blue hover:brightness-105 transition-all active:scale-95"
-            >
+            <button type="submit"
+              className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white bg-brand-blue hover:brightness-105 transition-all active:scale-95">
               {isEdit ? "Simpan Perubahan" : "Tambah Data"}
             </button>
           </div>
