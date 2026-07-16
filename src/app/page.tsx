@@ -13,7 +13,7 @@ import DonutChart from "@/components/charts/DonutChart";
 import { StatusBadge } from "@/components/Badges";
 import type { CleanRow, ParseResult } from "@/lib/types";
 import { aggregateByStatus, isFailed, isSuccess } from "@/lib/aggregate";
-import { formatNumber, formatRupiah, formatRupiahCompact, formatTanggal } from "@/lib/format";
+import { formatNumber, formatRupiah, formatRupiahCompact, formatTanggal, tanggalToIso } from "@/lib/format";
 import { exportCsv, exportXlsx } from "@/lib/export";
 import { saveDataset, loadDataset } from "@/lib/db";
 import { addHistory, getActiveId, newId, setActiveId } from "@/lib/history";
@@ -160,8 +160,9 @@ function DashboardInner() {
       if (kanal && r.product_name !== kanal) return false;
       if (status && r.sts_trx !== status) return false;
       if (instansi && r.corpid !== instansi) return false;
-      if (from && r.tanggal.slice(0, 10) < from) return false;
-      if (to && r.tanggal.slice(0, 10) > to) return false;
+      const isoDate = tanggalToIso(r.tanggal);
+      if (from && isoDate && isoDate < from) return false;
+      if (to && isoDate && isoDate > to) return false;
       if (q) {
         const hay = `${r.corpid} ${r.corpnm} ${r.txid} ${r.src_number}`.toLowerCase();
         if (!hay.includes(q)) return false;

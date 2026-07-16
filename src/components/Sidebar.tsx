@@ -38,17 +38,6 @@ const MENU = [
       </svg>
     ),
   },
-  {
-    href: "/tentang",
-    label: "Tentang",
-    icon: (
-      <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-        <circle cx="9" cy="9" r="7" stroke="currentColor" strokeWidth="1.5" />
-        <path d="M9 8.2v4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-        <circle cx="9" cy="5.6" r="0.9" fill="currentColor" />
-      </svg>
-    ),
-  },
 ];
 
 export default function Sidebar() {

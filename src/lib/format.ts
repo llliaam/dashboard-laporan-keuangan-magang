@@ -39,6 +39,22 @@ export function formatDateTime(iso: string): string {
   }) + ", " + d.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", hour12: false }).replace(".", ":");
 }
 
+// Konversi berbagai format tanggal ke "YYYY-MM-DD" untuk perbandingan filter.
+// Handle: "YYYY-MM-DD HH:MM:SS", "DD/MM/YYYY HH:MM", "M/D/YY HH:MM" (Excel US locale)
+export function tanggalToIso(raw: string): string {
+  if (!raw) return "";
+  // YYYY-MM-DD (ISO — sudah benar)
+  const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
+  // DD/MM/YYYY
+  const dmy4 = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (dmy4) return `${dmy4[3]}-${dmy4[2].padStart(2, "0")}-${dmy4[1].padStart(2, "0")}`;
+  // M/D/YY (Excel US locale, e.g. "1/1/25 6:05")
+  const mdy2 = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2})(?:[^0-9]|$)/);
+  if (mdy2) return `${2000 + Number(mdy2[3])}-${mdy2[1].padStart(2, "0")}-${mdy2[2].padStart(2, "0")}`;
+  return "";
+}
+
 export function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
