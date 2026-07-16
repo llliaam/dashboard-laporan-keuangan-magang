@@ -17,6 +17,7 @@ import { formatNumber, formatRupiah, formatRupiahCompact, formatTanggal, tanggal
 import { exportCsv, exportXlsx } from "@/lib/export";
 import { saveDataset, loadDataset } from "@/lib/db";
 import { addHistory, getActiveId, newId, setActiveId } from "@/lib/history";
+import { toast } from "sonner";
 
 const PAGE_SIZE = 10;
 
@@ -214,6 +215,7 @@ function DashboardInner() {
       if (id) saveDataset(id, next).catch(() => {});
       return next;
     });
+    toast.success("Data berhasil ditambahkan", { description: `corpid ${newRow.corpid} — ${newRow.corpnm}` });
   }, []);
 
   const handleUpdateRow = useCallback((original: CleanRow, updated: CleanRow) => {
@@ -224,6 +226,7 @@ function DashboardInner() {
       if (id) saveDataset(id, next).catch(() => {});
       return next;
     });
+    toast.success("Data berhasil diperbarui", { description: `corpid ${updated.corpid} — ${updated.corpnm}` });
   }, []);
 
   const handleDeleteRow = useCallback((target: CleanRow) => {
@@ -236,6 +239,7 @@ function DashboardInner() {
     });
     setSelectedRow(null);
     setDeleteRow(null);
+    toast.success("Data berhasil dihapus", { description: `corpid ${target.corpid} — ${target.corpnm}` });
   }, []);
 
   // ===== Render =====
@@ -302,13 +306,13 @@ function DashboardInner() {
             {exportOpen && (
               <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-xl border border-gray-100 py-1.5 z-20">
                 <button
-                  onClick={() => { exportXlsx(filtered, meta?.fileName ?? "data"); setExportOpen(false); }}
+                  onClick={() => { exportXlsx(filtered, meta?.fileName ?? "data"); setExportOpen(false); toast.success("File Excel berhasil diunduh", { description: `${formatNumber(filtered.length)} baris diekspor` }); }}
                   className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
                 >
                   Excel (.xlsx)
                 </button>
                 <button
-                  onClick={() => { exportCsv(filtered, meta?.fileName ?? "data"); setExportOpen(false); }}
+                  onClick={() => { exportCsv(filtered, meta?.fileName ?? "data"); setExportOpen(false); toast.success("File CSV berhasil diunduh", { description: `${formatNumber(filtered.length)} baris diekspor` }); }}
                   className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
                 >
                   CSV (.csv)
