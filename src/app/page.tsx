@@ -306,13 +306,13 @@ function DashboardInner() {
             {exportOpen && (
               <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-xl border border-gray-100 py-1.5 z-20">
                 <button
-                  onClick={() => { exportXlsx(filtered, meta?.fileName ?? "data"); setExportOpen(false); toast.success("File Excel berhasil diunduh", { description: `${formatNumber(filtered.length)} baris diekspor` }); }}
+                  onClick={() => { exportXlsx(rows!, meta?.fileName ?? "data"); setExportOpen(false); toast.success("File Excel berhasil diunduh", { description: `${formatNumber(rows!.length)} baris diekspor` }); }}
                   className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
                 >
                   Excel (.xlsx)
                 </button>
                 <button
-                  onClick={() => { exportCsv(filtered, meta?.fileName ?? "data"); setExportOpen(false); toast.success("File CSV berhasil diunduh", { description: `${formatNumber(filtered.length)} baris diekspor` }); }}
+                  onClick={() => { exportCsv(rows!, meta?.fileName ?? "data"); setExportOpen(false); toast.success("File CSV berhasil diunduh", { description: `${formatNumber(rows!.length)} baris diekspor` }); }}
                   className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
                 >
                   CSV (.csv)

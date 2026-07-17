@@ -3,8 +3,6 @@ import type { CleanRow } from "./types";
 import { CLEAN_COLUMNS } from "./types";
 import { formatRupiah, formatTanggal } from "./format";
 
-// Baris untuk export: angka diformat Rupiah, tanggal format Indonesia —
-// sama dengan tampilan tabel bersih (sesuai CLAUDE.md, export = tabel bersih).
 function toExportRows(rows: CleanRow[]): Record<string, string>[] {
   return rows.map((r) => ({
     corpid: r.corpid,
@@ -22,6 +20,27 @@ function toExportRows(rows: CleanRow[]): Record<string, string>[] {
   }));
 }
 
+// Untuk CSV: kolom yang berisi angka panjang (src_number, txid, corpid)
+// dibungkus ="value" agar Excel tidak konversi ke scientific notation.
+const forceText = (v: string) => (v ? `="${v}"` : "");
+
+function toExportRowsCsv(rows: CleanRow[]): Record<string, string>[] {
+  return rows.map((r) => ({
+    corpid: forceText(r.corpid),
+    corpnm: r.corpnm,
+    branchid: r.branchid,
+    src_number: forceText(r.src_number),
+    amount: formatRupiah(r.amount),
+    fee: formatRupiah(r.fee),
+    total: formatRupiah(r.total),
+    product_name: r.product_name,
+    sts_trx: r.sts_trx,
+    txid: forceText(r.txid),
+    err_message: r.err_message,
+    tanggal: formatTanggal(r.tanggal),
+  }));
+}
+
 export function exportXlsx(rows: CleanRow[], fileName: string): void {
   const ws = XLSX.utils.json_to_sheet(toExportRows(rows), {
     header: CLEAN_COLUMNS.map((c) => c.key),
@@ -32,11 +51,13 @@ export function exportXlsx(rows: CleanRow[], fileName: string): void {
 }
 
 export function exportCsv(rows: CleanRow[], fileName: string): void {
-  const ws = XLSX.utils.json_to_sheet(toExportRows(rows), {
+  const ws = XLSX.utils.json_to_sheet(toExportRowsCsv(rows), {
     header: CLEAN_COLUMNS.map((c) => c.key),
   });
-  const csv = XLSX.utils.sheet_to_csv(ws);
-  const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" });
+  // Pakai semicolon agar Excel locale Indonesia langsung baca per-kolom.
+  // sep= hint di baris pertama memberitahu Excel delimiter yang dipakai.
+  const csv = XLSX.utils.sheet_to_csv(ws, { FS: ";" });
+  const blob = new Blob(["﻿" + "sep=;\r\n" + csv], { type: "text/csv;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;

@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
@@ -64,9 +65,15 @@ export default function Sidebar() {
   return (
     <aside className="w-60 shrink-0 bg-white border-r border-gray-200 flex flex-col px-4 py-7 min-h-screen sticky top-0 h-screen">
       {/* Brand */}
-      <div className="flex items-center gap-1.5 pl-2 pb-4">
-        <span className="text-[22px] font-bold text-brand-blue">Bank</span>
-        <span className="text-[22px] font-bold text-brand-orange">SUMUT</span>
+      <div className="pl-2 pb-4">
+        <Image
+          src="/images/Bank_Sumut_Logo 4.png"
+          alt="Logo Bank Sumut"
+          width={140}
+          height={48}
+          className="object-contain"
+          priority
+        />
       </div>
 
       <p className="pl-3.5 pb-2 text-[11px] font-semibold tracking-[0.08em] text-gray-400">MENU</p>
@@ -92,6 +99,22 @@ export default function Sidebar() {
       </nav>
 
       <div className="flex-1" />
+
+      {/* Kalender / tanggal */}
+      <div className="mb-3 mx-0.5 flex items-center gap-2.5 bg-gray-50 border border-gray-200 rounded-[10px] px-3.5 py-2.5">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" className="text-gray-400 shrink-0">
+          <rect x="1" y="2.5" width="12" height="10.5" rx="2" stroke="currentColor" strokeWidth="1.2" />
+          <path d="M1 5.5h12" stroke="currentColor" strokeWidth="1.2" />
+          <path d="M4.5 1v3M9.5 1v3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+        </svg>
+        <span className="text-[12px] font-medium text-gray-500">
+          {new Date().toLocaleDateString("id-ID", {
+            day: "2-digit",
+            month: "short",
+            year: "numeric",
+          })}
+        </span>
+      </div>
 
       <button
         onClick={() => setExitOpen(true)}
