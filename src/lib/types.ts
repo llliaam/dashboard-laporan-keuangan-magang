@@ -44,7 +44,7 @@ export interface HistoryEntry {
   convertedAt: string; // ISO date
   rowCount: number;
   dropped: number;
-  fileType: "Laporan Transaksi" | "Pemasukan Pajak Pemda";
+  fileType: "Laporan Transaksi";
   status: "ok" | "failed";
   errorMsg?: string;
 }

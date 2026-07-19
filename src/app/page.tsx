@@ -21,13 +21,10 @@ import { toast } from "sonner";
 
 const PAGE_SIZE = 10;
 
-type FileType = "Laporan Transaksi" | "Pemasukan Pajak Pemda";
-
 function DashboardInner() {
   const searchParams = useSearchParams();
   const [rows, setRows] = useState<CleanRow[] | null>(null);
   const [meta, setMeta] = useState<{ fileName: string; dropped: number } | null>(null);
-  const [fileType, setFileType] = useState<FileType>("Laporan Transaksi");
   const [loading, setLoading] = useState(true);
 
   // filter state
@@ -113,11 +110,11 @@ function DashboardInner() {
         convertedAt: new Date().toISOString(),
         rowCount: result.rows.length,
         dropped: result.dropped,
-        fileType,
+        fileType: "Laporan Transaksi",
         status: "ok",
       });
     },
-    [fileType]
+    []
   );
 
   const handleConvertFailed = useCallback(
@@ -128,12 +125,12 @@ function DashboardInner() {
         convertedAt: new Date().toISOString(),
         rowCount: 0,
         dropped: 0,
-        fileType,
+        fileType: "Laporan Transaksi",
         status: "failed",
         errorMsg: message,
       });
     },
-    [fileType]
+    []
   );
 
   // ===== Derivasi data =====
@@ -257,8 +254,6 @@ function DashboardInner() {
   if (!rows) {
     return (
       <UploadFlow
-        fileType={fileType}
-        onFileTypeChange={setFileType}
         onConverted={handleConverted}
         onConvertFailed={handleConvertFailed}
       />

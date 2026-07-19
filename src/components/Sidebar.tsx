@@ -46,14 +46,11 @@ export default function Sidebar() {
   const [exitOpen, setExitOpen] = useState(false);
 
   const handleExit = async () => {
-    // Di Tauri: tutup jendela aplikasi. Di browser: window.close() (berhasil
-    // hanya jika tab dibuka via script — fallback tampilkan pesan singkat).
     try {
-      const w = window as unknown as {
-        __TAURI__?: { window?: { getCurrentWindow?: () => { close: () => Promise<void> } } };
-      };
-      if (w.__TAURI__?.window?.getCurrentWindow) {
-        await w.__TAURI__.window.getCurrentWindow().close();
+      const isTauri = "__TAURI_INTERNALS__" in window;
+      if (isTauri) {
+        const { getCurrentWindow } = await import("@tauri-apps/api/window");
+        await getCurrentWindow().close();
         return;
       }
     } catch {

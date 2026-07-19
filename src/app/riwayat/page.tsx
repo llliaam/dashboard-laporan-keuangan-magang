@@ -105,7 +105,6 @@ export default function RiwayatPage() {
           >
             <option value="">Semua jenis</option>
             <option value="Laporan Transaksi">Laporan Transaksi</option>
-            <option value="Pemasukan Pajak Pemda">Pemasukan Pajak Pemda</option>
           </select>
         </div>
 

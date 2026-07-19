@@ -1,6 +1,6 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "dashboard-konversi-data-transaksi-excel",
+  "productName": "Dashboard Konversi Bank Sumut",
   "version": "0.1.0",
   "identifier": "com.banksumut.dashboard-laporan-transaksi",
   "build": {
@@ -13,10 +13,10 @@
     "windows": [
       {
         "title": "Dashboard Konversi Data Transaksi",
-        "width": 800,
-        "height": 600,
+        "width": 1280,
+        "height": 800,
         "resizable": true,
-        "fullscreen": false
+        "maximized": true
       }
     ],
     "security": {
@@ -33,6 +33,12 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser",
+        "startMenuFolder": "Dashboard Bank Sumut"
+      }
+    },
     "android": {
       "debugApplicationIdSuffix": ".debug"
     }

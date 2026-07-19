@@ -2,14 +2,11 @@ import * as XLSX from "xlsx";
 import type { CleanRow, ParseResult } from "./types";
 
 // Urutan kolom pada data MENTAH (pipe-delimited, per file aktual):
-// corpid | corpnm | branchid | src_number | amount | fee | total | product_name | sts_trx | txid | err_message | tanggal
+// corpid | corpnm | src_number | branchid | amount | fee | total | product_name | sts_trx | txid | err_message | tanggal
 const RAW_COL_COUNT = 12;
 
-// Nama sheet yang dicari per jenis file.
-const SHEET_NAMES: Record<string, string[]> = {
-  "Laporan Transaksi": ["data transaksi"],
-  "Pemasukan Pajak Pemda": ["pemasukan pajak", "pajak", "pemasukan"],
-};
+// Nama sheet fallback jika content-based detection gagal.
+const SHEET_NAMES: string[] = ["data transaksi"];
 
 // Langkah 2 — hapus tanda kutip tunggal di awal/akhir nilai string.
 function stripQuotes(v: string): string {
@@ -74,8 +71,8 @@ export function parseRawLine(line: string): CleanRow | null {
   return {
     corpid,
     corpnm: stripQuotes(parts[1]),
-    branchid: stripQuotes(parts[2]),
-    src_number: stripQuotes(parts[3]),
+    src_number: stripQuotes(parts[2]),
+    branchid: stripQuotes(parts[3]),
     amount: toNumber(parts[4]),
     fee: toNumber(parts[5]),
     total: toNumber(parts[6]),
@@ -109,11 +106,22 @@ export function parseRawLines(allLines: string[]): ParseResult {
   return { rows, totalRaw: lines.length, dropped, droppedSamples };
 }
 
-// Cari nama sheet yang cocok untuk fileType, fallback ke sheet pertama.
-function findSheet(wb: XLSX.WorkBook, fileType: string): string {
-  const candidates = SHEET_NAMES[fileType] ?? ["data transaksi"];
+// Deteksi sheet data mentah berdasarkan isi: cari sheet yang baris pertama datanya
+// (baris ke-2, index r=1) di kolom A mengandung karakter pipe '|'.
+// Fallback: nama-based (SHEET_NAMES), lalu sheet pertama.
+function findSheet(wb: XLSX.WorkBook): string {
+  // Priority 1: content-based — sheet dengan pipe-delimited di cell A2
+  for (const name of wb.SheetNames) {
+    const sheet = wb.Sheets[name];
+    if (!sheet["!ref"]) continue;
+    const range = XLSX.utils.decode_range(sheet["!ref"]);
+    if (range.e.r < 1) continue; // hanya header, tidak ada data
+    const a2 = sheet[XLSX.utils.encode_cell({ r: 1, c: range.s.c })];
+    if (a2 && a2.t === "s" && String(a2.v).includes("|")) return name;
+  }
+  // Priority 2: name-based
   const found = wb.SheetNames.find((n) =>
-    candidates.some((c) => n.trim().toLowerCase().includes(c))
+    SHEET_NAMES.some((c) => n.trim().toLowerCase().includes(c))
   );
   return found ?? wb.SheetNames[0];
 }
@@ -148,9 +156,9 @@ function cellToText(cell: XLSX.CellObject | undefined): string {
 // cellNF:true agar cell.z (number-format) tersedia untuk deteksi kolom tanggal.
 // Baca per-cell (bukan sheet_to_json{raw:false}) supaya nilai numerik ASLI dipakai,
 // bukan teks terformat — kunci perbaikan txid scientific & amount.
-export function parseWorkbook(data: ArrayBuffer, fileType = "Laporan Transaksi"): ParseResult {
+export function parseWorkbook(data: ArrayBuffer): ParseResult {
   const wb = XLSX.read(data, { type: "array", cellNF: true });
-  const sheetName = findSheet(wb, fileType);
+  const sheetName = findSheet(wb);
   if (!sheetName) throw new Error("File tidak memiliki sheet.");
   const sheet = wb.Sheets[sheetName];
   if (!sheet["!ref"]) throw new Error("Sheet kosong atau hanya berisi header.");
@@ -169,8 +177,7 @@ export function parseWorkbook(data: ArrayBuffer, fileType = "Laporan Transaksi")
   return parseRawLines(lines);
 }
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-export function parseCsvText(text: string, _fileType = "Laporan Transaksi"): ParseResult {
+export function parseCsvText(text: string): ParseResult {
   const lines = text.split(/\r?\n/);
   lines.shift(); // buang header
   return parseRawLines(lines);

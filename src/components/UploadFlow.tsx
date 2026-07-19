@@ -14,8 +14,6 @@ type UploadState =
   | { status: "converting"; file: File };
 
 interface Props {
-  fileType: "Laporan Transaksi" | "Pemasukan Pajak Pemda";
-  onFileTypeChange: (t: "Laporan Transaksi" | "Pemasukan Pajak Pemda") => void;
   onConverted: (result: ParseResult, fileName: string) => void;
   onConvertFailed: (fileName: string, message: string) => void;
 }
@@ -46,7 +44,7 @@ function UploadCloudIcon({ active }: { active?: boolean }) {
   );
 }
 
-export default function UploadFlow({ fileType, onFileTypeChange, onConverted, onConvertFailed }: Props) {
+export default function UploadFlow({ onConverted, onConvertFailed }: Props) {
   const [state, setState] = useState<UploadState>({ status: "idle" });
   const [isDragging, setIsDragging] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -152,7 +150,7 @@ export default function UploadFlow({ fileType, onFileTypeChange, onConverted, on
         setInvalidMsg(msg);
         onConvertFailed(file.name, msg);
       };
-      w.postMessage({ type: isCsv ? "csv" : "xlsx", data: buffer, fileType });
+      w.postMessage({ type: isCsv ? "csv" : "xlsx", data: buffer });
     } else {
       // fallback sync (bisa blokir UI untuk file besar)
       setTimeout(() => {
@@ -196,21 +194,6 @@ export default function UploadFlow({ fileType, onFileTypeChange, onConverted, on
 
   return (
     <div className="flex flex-col items-center justify-center py-10 gap-5">
-      {/* Pilih jenis file */}
-      <div className="flex items-center gap-2 bg-white rounded-xl p-1.5 shadow-sm">
-        {(["Laporan Transaksi", "Pemasukan Pajak Pemda"] as const).map((t) => (
-          <button
-            key={t}
-            onClick={() => onFileTypeChange(t)}
-            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
-              fileType === t ? "bg-brand-blue text-white" : "text-gray-500 hover:bg-gray-100"
-            }`}
-          >
-            {t}
-          </button>
-        ))}
-      </div>
-
       <div
         className="w-full max-w-3xl rounded-2xl flex flex-col items-center py-14 px-10 gap-6 relative transition-all duration-200 border-2 border-dashed border-brand-orange"
         style={{
